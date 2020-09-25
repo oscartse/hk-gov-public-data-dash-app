@@ -89,10 +89,7 @@ def update_graph_live(n):
     gb = df_traffic.groupby(['ROAD_SATURATION_LEVEL', 'REGION'])
     for x in gb.groups:
         mini_df = gb.get_group(x)
-        lat_mini = eval("[" + ", None ,".join(
-            [x.replace("[", "").replace("]", "") for x in mini_df['detailed_route_lat'].map(str).to_list()]) + "]")
-        long_mini = eval("[" + ", None ,".join(
-            [x.replace("[", "").replace("]", "") for x in mini_df['detailed_route_long'].map(str).to_list()]) + "]")
+
         if "GOOD" in mini_df['ROAD_SATURATION_LEVEL'].unique()[0]:
             color = "green"
         elif "AVERAGE" in mini_df['ROAD_SATURATION_LEVEL'].unique()[0]:
@@ -101,11 +98,20 @@ def update_graph_live(n):
             color = "red"
         else:
             color = "black"
+
         traffic_trace.append(
             go.Scattermapbox(
                 mode="markers+lines",
-                lat=lat_mini,
-                lon=long_mini,
+                lat=eval(
+                    "[" + ", None ,".join(
+                        [x.replace("[", "").replace("]", "") for x in mini_df['detailed_route_lat'].map(str).to_list()]
+                    ) + "]"
+                ),
+                lon=eval(
+                    "[" + ", None ,".join(
+                        [x.replace("[", "").replace("]", "") for x in mini_df['detailed_route_long'].map(str).to_list()]
+                    ) + "]"
+                ),
                 text=mini_df['full_location_chin_start'] + mini_df['linking_word'] + mini_df['full_location_chin_end'],
                 hoverinfo='text',
                 marker={
