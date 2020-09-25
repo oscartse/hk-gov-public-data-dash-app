@@ -48,17 +48,17 @@ def get_traffic_latest_data() -> pd.DataFrame:
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(
     __name__,
-    # external_stylesheets=external_stylesheets,
+    external_stylesheets=external_stylesheets,
 )
 
 app.layout = html.Div(
     html.Div([
-        # html.H4('HK weather and traffic live update'),
+        html.H4('HK weather and traffic live update'),
         html.Div(id='live-update-text'),
         dcc.Graph(id='live-update-graph'),
         dcc.Interval(
             id='interval-component',
-            interval=10*1000,  # sec that update the graph
+            interval=60*1000,  # sec that update the graph
             n_intervals=0
         )
     ])
@@ -67,11 +67,27 @@ app.layout = html.Div(
 
 @app.callback(Output('live-update-text', 'children'), [Input('interval-component', 'n_intervals')])
 def update_metrics(n):
+
+    df_weather = get_temperature_latest_data()
+
+    mean_weather = round(df_weather.value.mean(), 3)
+    update_time = df_weather.updateTime.unique()[0]
+
+    max_temp = {
+        "place": df_weather[df_weather.value == df_weather.value.max()].place.iloc[0],
+        "temp": df_weather[df_weather.value == df_weather.value.max()].value.iloc[0]
+    }
+    min_temp = {
+        "place": df_weather[df_weather.value == df_weather.value.min()].place.iloc[0],
+        "temp": df_weather[df_weather.value == df_weather.value.min()].value.iloc[0]
+    }
+
     style = {'padding': '5px', 'fontSize': '16px'}
     return [
-        # html.Span('Longitude: {0:.2f}'.format(lon), style=style),
-        # html.Span('Latitude: {0:.2f}'.format(lat), style=style),
-        # html.Span('Altitude: {0:0.2f}'.format(alt), style=style),
+        html.Span(f'Update Time: {update_time}', style=style),
+        html.Span(f'Mean Temperature: {mean_weather}', style=style),
+        html.Span(f'Highest Temperature: {max_temp["place"]} {max_temp["temp"]}*C', style=style),
+        html.Span(f'Lowest Temperature: {min_temp["place"]} {min_temp["temp"]}*C', style=style),
     ]
 
 
@@ -130,9 +146,9 @@ def update_graph_live(n):
             size=10,
             color=df_weather['value'],
             colorscale='RdYlGn',
-            cmin=15,
+            cmin=10,
             cmid=25,
-            cmax=30,
+            cmax=40,
             reversescale=True,
             showscale=True,
         ),
