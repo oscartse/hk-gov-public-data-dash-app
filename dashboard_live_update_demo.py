@@ -1,9 +1,11 @@
 import dash
+import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
 import pandas as pd
+import numpy as np
 import os
 
 
@@ -45,7 +47,7 @@ def get_traffic_latest_data() -> pd.DataFrame:
     return ultimate_traffic_df
 
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+external_stylesheets = ['https://github.com/plotly/dash-app-stylesheets/blob/master/dash-stock-tickers.css']
 app = dash.Dash(
     __name__,
     external_stylesheets=external_stylesheets,
@@ -53,7 +55,6 @@ app = dash.Dash(
 
 app.layout = html.Div(
     html.Div([
-        html.H4('HK weather and traffic live update'),
         html.Div(id='live-update-text'),
         dcc.Graph(id='live-update-graph'),
         dcc.Interval(
@@ -61,18 +62,29 @@ app.layout = html.Div(
             interval=60*1000,  # sec that update the graph
             n_intervals=0
         )
-    ])
+    ]),
 )
 
 
 @app.callback(Output('live-update-text', 'children'), [Input('interval-component', 'n_intervals')])
 def update_metrics(n):
 
+    # Traffic
+    df_traffic = get_traffic_latest_data()
+    traffic_update_time = max(df_traffic['CAPTURE_DATE'].unique())
+    saturation_df = pd.merge(
+        df_traffic.groupby(["REGION", "ROAD_SATURATION_LEVEL"]).size().to_frame(
+            "saturation_count").reset_index(),
+        df_traffic.groupby("REGION").size().to_frame("total_count").reset_index(),
+        on='REGION', how="inner"
+    )
+    saturation_df['saturation_pct'] = round((saturation_df['saturation_count'] / saturation_df['total_count']) * 100, 2).apply(lambda x: f"{x}%")
+    saturation_df = saturation_df.drop(columns=['saturation_count', 'total_count'])
+
+    # Weather
     df_weather = get_temperature_latest_data()
-
     mean_weather = round(df_weather.value.mean(), 3)
-    update_time = df_weather.updateTime.unique()[0]
-
+    temperature_update_time = df_weather.updateTime.unique()[0]
     max_temp = {
         "place": df_weather[df_weather.value == df_weather.value.max()].place.iloc[0],
         "temp": df_weather[df_weather.value == df_weather.value.max()].value.iloc[0]
@@ -82,12 +94,23 @@ def update_metrics(n):
         "temp": df_weather[df_weather.value == df_weather.value.min()].value.iloc[0]
     }
 
-    style = {'padding': '5px', 'fontSize': '16px'}
+    # style = {'padding': '5px', 'fontSize': '16px'}
     return [
-        html.Span(f'Update Time: {update_time}', style=style),
-        html.Span(f'Mean Temperature: {mean_weather}', style=style),
-        html.Span(f'Highest Temperature: {max_temp["place"]} {max_temp["temp"]}*C', style=style),
-        html.Span(f'Lowest Temperature: {min_temp["place"]} {min_temp["temp"]}*C', style=style),
+        # html.Div(f'Traffic Update Time: {traffic_update_time}'),
+        # dash_table.DataTable(
+        #     style_data={
+        #         'whiteSpace': 'normal',
+        #         'height': 7,
+        #         'width': 10,
+        #     },
+        #     id='table',
+        #     columns=[{"name": i, "id": i} for i in saturation_df.columns],
+        #     data=saturation_df.to_dict('records'),
+        # ),
+        # html.Div(f'Weather Update Time: {temperature_update_time}'),
+        # html.Span(f'Mean Temperature: {mean_weather}'),
+        # html.Span(f'Highest Temperature: {max_temp["place"]} {max_temp["temp"]}*C'),
+        # html.Span(f'Lowest Temperature: {min_temp["place"]} {min_temp["temp"]}*C'),
     ]
 
 
@@ -164,7 +187,7 @@ def update_graph_live(n):
     fig.update_layout(
         showlegend=False,
         height=700,
-        width=1000,
+        autosize=True,
         mapbox={
             'center': {'lat': 22.344044, 'lon': 114.100998},
             'style': "light",
