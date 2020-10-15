@@ -1,24 +1,29 @@
 import dash
-import dash_table
+# import dash_table
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
 import pandas as pd
-import numpy as np
 import os
-
 
 from geopy.geocoders import Nominatim
 geolocator = Nominatim(user_agent="plotly")
+MAPBOX_TOKEN = r'pk.eyJ1Ijoib3NjYXJ0bWMiLCJhIjoiY2tmYzdtc29nMDJjdDJzbm9wdzV4Nzg3aSJ9.zrp0XoINM_jtQqz5j0f-cA'
 
-route_traffic_mapping_path = r'C:\Users\oscartmc\PycharmProjects\dash-app\mapping\ultimate_geolocation_mapping_traffic.csv'
-route_traffic_mapping = pd.read_csv(route_traffic_mapping_path).drop(columns=['REGION', 'ROAD_TYPE'])
+# mappings - traffic and weather location_code <> location
+mapping_path_route_traffic = r'C:\Users\oscartmc\PycharmProjects\dash-app\mapping\ultimate_geolocation_mapping_traffic.csv'
+mapping_route_traffic = pd.read_csv(mapping_path_route_traffic).drop(columns=['REGION', 'ROAD_TYPE'])
 mapping_path_weather_temperature = r'C:\Users\oscartmc\PycharmProjects\dash-app\mapping\geolocation_mapping_temperature.csv'
 mapping_df_weather_temperature = pd.read_csv(mapping_path_weather_temperature)
 
 
 def get_temperature_latest_data() -> pd.DataFrame:
+    """
+    1. Read the csv then output the latest scrapped batch of data
+    2. Join the data with mapping
+    :return: pd.DataFrame
+    """
     df_temperature = pd.read_csv(
         r'C:\Users\oscartmc\PycharmProjects\hkgov-public-data-pipeline\data\02_intermediate'
         r'\wth_current_weather_report_temperature\temperature.csv')
@@ -34,19 +39,24 @@ def get_temperature_latest_data() -> pd.DataFrame:
 
 
 def get_traffic_latest_data() -> pd.DataFrame:
+    """
+    1. List the directory and return latest scrapped csv of data
+    2. Join the data with mapping
+    :return: pd.DataFrame
+    """
 
-    # find latest traffic CSV in path
     storage_path = r'C:\Users\oscartmc\PycharmProjects\public-data-scripts\data\csv\traffic'
     traffic_df = pd.read_csv(
         os.path.join(storage_path, max([x for x in os.listdir(storage_path) if not x.endswith("pkl")])))
     traffic_df[['starting_node', 'ending_node']] = traffic_df['LINK_ID'].str.split("-", expand=True)
 
-    ultimate_traffic_df = pd.merge(traffic_df, route_traffic_mapping, on="LINK_ID", how="left").query("LINK_ID!='6111-6112'")
+    ultimate_traffic_df = pd.merge(traffic_df, mapping_route_traffic, on="LINK_ID", how="left").query("LINK_ID!='6111-6112'")
     ultimate_traffic_df['linking_word'] = r'to'
 
     return ultimate_traffic_df
 
 
+# Dash main code
 external_stylesheets = ['https://github.com/plotly/dash-app-stylesheets/blob/master/dash-stock-tickers.css']
 app = dash.Dash(
     __name__,
@@ -59,8 +69,8 @@ app.layout = html.Div(
         dcc.Graph(id='live-update-graph'),
         dcc.Interval(
             id='interval-component',
-            interval=60*1000,  # sec that update the graph
-            n_intervals=0
+            interval=60*1000,  # 600000 milliseconds = 1 minute
+            n_intervals=0  # interval that ignored when streaming data
         )
     ]),
 )
@@ -96,7 +106,8 @@ def update_metrics(n):
 
     # style = {'padding': '5px', 'fontSize': '16px'}
     return [
-        # html.Div(f'Traffic Update Time: {traffic_update_time}'),
+        html.Div(f'Traffic Update Time: {traffic_update_time}'),
+        # Data Table for tabular display
         # dash_table.DataTable(
         #     style_data={
         #         'whiteSpace': 'normal',
@@ -107,17 +118,26 @@ def update_metrics(n):
         #     columns=[{"name": i, "id": i} for i in saturation_df.columns],
         #     data=saturation_df.to_dict('records'),
         # ),
-        # html.Div(f'Weather Update Time: {temperature_update_time}'),
-        # html.Span(f'Mean Temperature: {mean_weather}'),
-        # html.Span(f'Highest Temperature: {max_temp["place"]} {max_temp["temp"]}*C'),
-        # html.Span(f'Lowest Temperature: {min_temp["place"]} {min_temp["temp"]}*C'),
+        html.Div(f'Weather Update Time: {temperature_update_time} '),
+        html.Span(f'Mean Temperature: {mean_weather} '),
+        html.Span(f'Highest Temperature: {max_temp["place"]} {max_temp["temp"]}*C '),
+        html.Span(f'Lowest Temperature: {min_temp["place"]} {min_temp["temp"]}*C '),
     ]
 
 
 # Multiple components can update everytime interval gets fired.
 @app.callback(Output('live-update-graph', 'figure'), [Input('interval-component', 'n_intervals')])
 def update_graph_live(n):
+    """
+    1. Generate Trace by type
+        a. Traffic trace
+        b. Weather trace
+    2. Add Trace by for loop
+    3. Beautify figure layout
 
+    :param n: ignored, interval parameter from app.layout
+    :return: app callback
+    """
     df_weather = get_temperature_latest_data()
     df_traffic = get_traffic_latest_data()
 
@@ -141,6 +161,8 @@ def update_graph_live(n):
         traffic_trace.append(
             go.Scattermapbox(
                 mode="markers+lines",
+
+                # by adding None between each coordinate set (start, end), lines can be formed on the map
                 lat=eval(
                     "[" + ", None ,".join(
                         [x.replace("[", "").replace("]", "") for x in mini_df['detailed_route_lat'].map(str).to_list()]
@@ -192,7 +214,7 @@ def update_graph_live(n):
             'center': {'lat': 22.344044, 'lon': 114.100998},
             'style': "light",
             'zoom': 9.8,
-            'accesstoken': "pk.eyJ1Ijoib3NjYXJ0bWMiLCJhIjoiY2tmYzdtc29nMDJjdDJzbm9wdzV4Nzg3aSJ9.zrp0XoINM_jtQqz5j0f-cA"
+            'accesstoken': MAPBOX_TOKEN
         }
     )
 
